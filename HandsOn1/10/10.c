@@ -1,4 +1,5 @@
-/* Name: Abheet Sethi
+/* Name: 10.c
+ * Author: Abheet Sethi
  * Registration No.: MT2024004
  
  * Problem Statement: Write a program to open a file with read write mode, write 10 bytes, move the file pointer by 10 bytes (use lseek) and
@@ -6,6 +7,8 @@
  
   		      A. Check the return value of lseek
   		      B. Open the file with od and check the empty spaces in between the data
+
+ * Date: 8 Aug 2024
 */
 
 #include<stdio.h>
@@ -17,7 +20,7 @@ int main()
 {
 	int fd;
 	off_t offset;
-	ssize_t bytes_written;
+	int bytes_written;
 	const char *data1 = "0123456789";
 	const char *data2 = "ABCDEFGHIJ";
 
@@ -52,5 +55,15 @@ int main()
 	printf("Data written successfully \n");
 	return 0;
 }
+
+/*
+
+Command: ./10
+
+Output:
+lseek moved the file pointer to offset: 139941193726640
+Data written successfully
+
+*/
 
 

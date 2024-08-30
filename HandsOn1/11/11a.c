@@ -1,10 +1,13 @@
-/* Name: Abheet Sethi
+/* Name: 11a.c
+ * Author: Abheet Sethi
  * Registration No.: MT2024004
  
  * Problem Statement: Write a program to open a file, duplicate the file descriptor and append the file
   		      with both the descriptor and check whether the file is updated properly or not.
  
   		      A. Use dup
+
+ * Date: 8 Aug 2024
 */
 
 #include<stdio.h>
@@ -55,3 +58,30 @@ int main()
 	printf("File updated successfully with dup. \n");
 	return 0;
 }
+
+/*
+
+Command: cat 11a.txt
+
+Output:
+Name: Abheet Sethi
+Registration No.: MT2024004
+
+This is program number 11a
+
+Command: ./11a
+
+Output:
+File updated successfully with dup. 
+
+Command: cat 11a.txt
+
+Output:
+Name: Abheet Sethi
+Registration No.: MT2024004
+
+This is program number 11a
+Appending with original FD 
+Appending with duplicated FD 
+
+*/

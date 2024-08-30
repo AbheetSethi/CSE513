@@ -1,4 +1,5 @@
-/* Name: Abheet Sethi
+/* Name: 11c.c
+ * Author: Abheet Sethi
  * Registration No.: MT2024004
  
  * Problem Statement: Write a program to open a file, duplicate the file descriptor and append the
@@ -6,6 +7,8 @@
   		      or not
  
   		      C. Use fcntl
+
+ * Date: 22 Aug 2024
 */
 
 #include<stdio.h>
@@ -56,4 +59,29 @@ int main()
 	printf("File updated successfully with fcntl \n");
 	return 0;
 }
-			
+
+/*
+
+Command: cat 11c.txt
+
+Output:
+Name: Abheet Sethi
+Registration No.: MT2024004
+
+This is program number 11c
+
+Command: ./11c
+
+Output:
+File updated successfully with fcntl 
+
+Command: cat 11c.txt
+Name: Abheet Sethi
+Registration No.: MT2024004
+
+This is program number 11c
+Appending with original FD 
+Appending with duplicated FD (fcntl) 
+
+*/	
+

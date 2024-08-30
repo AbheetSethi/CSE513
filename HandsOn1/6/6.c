@@ -1,8 +1,11 @@
-/* Name: Abheet Sethi
+/* Name: 6.c
+ * Author: Abheet Sethi
  * Registration No.: MT2024004
  
  * Problem Statement: Write a program to take input from STDIN and display on STDOUT.
  * 		      Use only read/write system calls
+
+ * Date: 8 Aug 2024
 */
 
 #include<unistd.h>
@@ -12,7 +15,7 @@
 int main()
 {
 	char buffer[BUFFER_SIZE];
-	ssize_t bytesRead;
+	int bytesRead;
 
 	while((bytesRead = read(STDIN_FILENO, buffer, BUFFER_SIZE)) > 0)
 	{
@@ -27,3 +30,15 @@ int main()
 
 	return 0;
 }
+
+/*
+
+Command: ./6
+
+Input: 
+This is program number 6
+
+Output:
+This is program number 6
+
+*/

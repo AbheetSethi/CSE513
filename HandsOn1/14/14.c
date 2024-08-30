@@ -1,10 +1,13 @@
-/* Name: Abheet Sethi
+/* Name: 14.c
+ * Author: Abheet Sethi
  * Registration No.: MT2024004
  
  * Problem Statement: Write a program to find the type of a file. 
   		      
   		      a. Input should be taken from command line.
   		      b. Program should be able to find any type of file
+
+ * Date: 22 Aug 2024
 */
 
 #include<stdio.h>
@@ -74,3 +77,17 @@ int main(int argc, char *agrv[])
 
 	return 0;
 }
+
+/*
+
+Command: ./14 14.txt
+
+Output:
+14.txt is a regular file
+
+Command: ./14 ../
+
+Output:
+../ is a directory
+
+*/

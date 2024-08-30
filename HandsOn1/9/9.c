@@ -1,4 +1,5 @@
-/* Name: Abheet Sethi
+/* Name: 9.c
+ * Author: Abheet Sethi
  * Registration Number: MT2024004
  
  * Problem Statement: Write a program to print the following information about a given file.
@@ -13,11 +14,13 @@
                       h. time of last access
                       i. time of last modification
                       j. time of last change
- */
+ 
+ * Date: 8 Aug 2024
+*/
 
 #include<stdio.h>
-#include<sys/stat.h>
-#include<time.h>
+#include<sys/stat.h> // it contains declarations for file status and statistics function like 'stat()' and the 'stuct stat' structure used to obtain file information
+#include<time.h> // this is for 'ctime()'
 
 int main(int argc, char *argv[])
 {
@@ -50,3 +53,23 @@ int main(int argc, char *argv[])
 
 	return 0;
 }
+
+/*
+
+Command: ./9
+
+Output:
+
+File: 9.txt
+Inode: 1449320
+Number of hard links: 1
+UID: 1000
+GID: 1000
+Size: 83 bytes
+BLock size: 4096 bytes
+NUmber of blocks: 8
+Time of last access: Fri Aug 16 08:34:52 2024
+Time of last modification: Fri Aug 16 08:34:52 2024
+Time of last change: Fri Aug 16 08:34:52 2024
+
+*/

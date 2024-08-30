@@ -1,18 +1,22 @@
-/* Name: Abheet Sethi
+/* Name: 7.c
+ * Author: Abheet Sethi
  * Registration No.: MT2024004
- *
+ 
  * Problem Statement: Write a program to copy file1 into file2
+
+ * Date: 8 Aug 2024
 */
 
 #include<stdio.h>
-#include<fcntl.h>
-#include<unistd.h>
+#include<fcntl.h> // it contains open()
+#include<unistd.h> // it contains, read, write, close
 #define BUFFER_SIZE 1024
 
 int main()
 {
+	
 	int source_fd, dest_fd;
-	ssize_t bytesRead, bytesWritten;
+	int bytesRead, bytesWritten;
 	char buffer[BUFFER_SIZE];
 
 	source_fd = open("7_file1.txt", O_RDONLY);
@@ -34,6 +38,7 @@ int main()
 
 	while((bytesRead = read(source_fd, buffer, BUFFER_SIZE)) > 0)
 	{
+		bytesWritten = write(dest_fd, buffer, bytesRead);
 		if (bytesWritten != bytesRead)
 		{
 			perror("Error writing to destination file");
@@ -55,3 +60,32 @@ int main()
 
 	return 0;
 }
+
+/*
+
+Command: cat 7_file1.txt
+
+Output:
+This is program number 7
+
+Command: cat 7_file2.txt
+
+Output:
+**No Output**
+
+Command: ./7
+
+Output:
+File copied successfully
+
+Command: cat 7_file1.txt
+
+Output:
+This is program number 7
+
+Command: cat 7_file2.txt
+
+Output:
+This is program number 7
+
+*/

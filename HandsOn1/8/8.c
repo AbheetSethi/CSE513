@@ -1,59 +1,56 @@
-/* Name: Abheet Sethi
+/* Name: 8.c
+ * Author: Abheet Sethi
  * Registration No.: MT2024004
  
- * Problem Statement: Write a program to open a file in read only mode read line by line and display each line
- * 		      as it is read. Close the file when end of file is reached
+ * Description: Write a program to open a file in read only mode read line by line and display each line
+ * 	        as it is read. Close the file when end of file is reached
+ * 
+ * Date: 8 Aug, 2024
 */
 
-#include<stdio.h>
-#include<fcntl.h>
-#include<unistd.h>
-#include<stdlib.h>
-
-#define BUFFER_SIZE 256
+#include <stdio.h>
+#include <errno.h>
+#include <stdlib.h>
+#include <unistd.h>
 
 int main()
 {
-	int fd, i, start;
-	ssize_t bytesRead;
-	char buffer[BUFFER_SIZE];
-	char *line;
+    FILE* fd = fopen("8.txt", "r");
+    if (fd == NULL) {
+        perror("Program");
+        exit(1);
+    }
 
-	fd = open("8.txt", O_RDONLY);
-	if(fd == -1)
-	{
-		perror("Error opening file");
-		return 1;
-	}
+    int c;
+    char buffer[1024];
+    int k = 0;
 
-	while((bytesRead = read(fd, buffer, BUFFER_SIZE)) > 0)
-	{
-		start = 0;
+    while ((c = fgetc(fd)) != EOF) {
+        buffer[k++] = c;
+        if (c == '\n' || k == 1023) {  
+            buffer[k] = '\0';  
+            write(1, buffer, k);
+            k = 0;  
+        }
+    }
 
-		for(i=0; i < bytesRead; i++)
-		{
-			if(buffer[i] == '\n')
-			{
-				buffer[i] = '\0';
-				printf("%s\n", &buffer[start]);
-				start = i+1;
-			}
-		}
+    if (k > 0) { 
+        buffer[k] = '\0';
+        write(1, buffer, k);
+    }
 
-		if(start < bytesRead)
-		{
-			printf("%s", &buffer[start]);
-		}
-	}
-
-	if(bytesRead == -1)
-	{
-		perror("Error reading file");
-		close(fd);
-		return 1;
-	}
-
-	close(fd);
-
-	return 0;
+    fclose(fd);
+    return 0;
 }
+
+/*
+
+Command: ./8
+
+Output:
+Name: Abheet Sethi
+Registration No.: MT2024004
+
+Content: This is program number 8
+
+*/
