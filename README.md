@@ -102,3 +102,58 @@ SCHED_RR).
 
 30. Write a program to run a script at a specific time using a Daemon process.
 
+# Hands ON List 2
+
+1. Write a separate program (for each time domain) to set a interval timer in 10sec and 
+10micro second
+ a. ITIMER_REAL
+ b. ITIMER_VIRTUAL
+ c. ITIMER_PROF
+ 
+2. Write a program to print the system resource limits. Use getrlimit system call.
+
+3. Write a program to set (any one) system resource limit. Use setrlimit system call.
+
+4. Write a program to measure how much time is taken to execute 100 getppid ( ) 
+system call. Use time stamp counter.
+
+5. Write a program to print the system limitation of 
+ a. maximum length of the arguments to the exec family of functions. 
+ b. maximum number of simultaneous process per user id. 
+ c. number of clock ticks (jiffy) per second. 
+ d. maximum number of open files
+ e. size of a page
+ f. total number of pages in the physical memory
+ g. number of currently available pages in the physical memory.
+ 
+6. Write a simple program to create three threads.
+
+7. Write a simple program to print the created thread ids.
+
+8. Write a separate program using signal system call to catch the following signals.
+ a. SIGSEGV
+ b. SIGINT
+ c. SIGFPE
+ d. SIGALRM (use alarm system call)
+ e. SIGALRM (use setitimer system call)
+ f. SIGVTALRM (use setitimer system call)
+ g. SIGPROF (use setitimer system call)
+ 
+9. Write a program to ignore a SIGINT signal then reset the default action of the SIGINT 
+signal - Use signal system call.
+
+10. Write a separate program using sigaction system call to catch the following signals.
+ a. SIGSEGV
+ b. SIGINT
+ c. SIGFPE
+ 
+11. Write a program to ignore a SIGINT signal then reset the default action of the SIGINT signal - 
+use sigaction system call.
+
+12. Write a program to create an orphan process. Use kill system call to send SIGKILL signal to 
+the parent process from the child process.
+
+13. Write two programs: first program is waiting to catch SIGSTOP signal, the second program 
+will send the signal (using kill system call). Find out whether the first program is able to catch 
+the signal or not.
+
