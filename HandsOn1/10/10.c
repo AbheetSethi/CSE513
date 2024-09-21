@@ -13,7 +13,7 @@
 
 #include<stdio.h>
 #include<fcntl.h>
-#include<unistd.h>
+#include<unistd.h> // import for write, read and leek 
 #include<string.h>
 
 int main()
@@ -40,6 +40,15 @@ int main()
 		return 1;
 	}
 
+	// Move the file pointer 10 bytes forward
+	offset = lseek(fd, 10, SEEK_CUR);
+	if(offset == -1)
+	{
+		perror("Error using lseek");
+		close(fd);
+		return 1;
+	}
+
 	printf("lseek moved the file pointer to offset: %ld \n", offset);
 
 	bytes_written = write(fd, data2, strlen(data2));
@@ -61,7 +70,7 @@ int main()
 Command: ./10
 
 Output:
-lseek moved the file pointer to offset: 139941193726640
+lseek moved the file pointer to offset: 20
 Data written successfully
 
 */
