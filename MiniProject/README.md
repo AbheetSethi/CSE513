@@ -1,4 +1,4 @@
-### Design and Development of Banking Management System
+# Design and Development of Banking Management System
 
 The Banking Management System aims to simulate the core functionalities of a bank, including 
 customer account management, transactions, loan processing, and administrative oversight. The 
@@ -8,7 +8,7 @@ handling of race conditions using file management, locking mechanisms, and proce
 synchronization.
 
 ## Roles:
-# 1. Customer: 
+### 1. Customer: 
 Customers log in using their credentials and have access to banking operations 
 such as viewing account balances, depositing or withdrawing money, transferring funds, 
 and applying for loans. The system ensures proper locking mechanisms to avoid race 
@@ -25,7 +25,7 @@ conditions when performing concurrent operations.
     o Logout
     o Exit
 
-# 2. Bank Employee: 
+### 2. Bank Employee: 
 Bank employees manage customer accounts, including opening, 
 modifying, or closing accounts, as well as processing loans.
     o Login System (one session per user)
@@ -39,7 +39,7 @@ modifying, or closing accounts, as well as processing loans.
     o Logout
     o Exit
 
-# 3. Manager:
+### 3. Manager:
     o Login System (one session per user)
     o Activate/Deactivate Customer Accounts
     o Assign Loan Application Processes to Employees
@@ -48,7 +48,7 @@ modifying, or closing accounts, as well as processing loans.
     o Logout
     o Exit
 
-# 4. Administrator: 
+### 4. Administrator: 
 The Administrator has the highest level of access and manages both 
 customer and employee accounts.
     o Login System (one session per user)
