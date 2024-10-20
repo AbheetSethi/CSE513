@@ -140,7 +140,7 @@ void *handle_client(void *arg) {
             break;
         case 3:
             printf("Manager selected.\n");
-            int manager_menu_result = display_manager_menu(client_socket);
+            int manager_menu_result = display_manager_menu(client_socket, user_id);
             if (manager_menu_result == 1) {
                 // Handle logout: return to role selection
                 printf("Manager logged out. Returning to role selection...\n");

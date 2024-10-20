@@ -1,125 +1,110 @@
-// loan_management.c
 #include "loan_management.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/file.h>
+#include <sys/socket.h>  
+#include <string.h>
 
-#define LOAN_DB "loans.dat"
+
+#define LOAN_DB "loans.txt"
 
 int apply_for_loan(int user_id, double amount) {
-    // TODO: Implement loan application logic
-
-    FILE *fp = fopen(LOAN_DB, "ab");  // Append mode to add new loans
+    FILE *fp = fopen(LOAN_DB, "a");  // Append mode to add new loans
     if (fp == NULL) {
         perror("Failed to open loans database");
         return -1;
     }
 
-    // Create new loan entry
     Loan new_loan;
-    new_loan.id = rand() % 1000000;  // Generating a random loan ID (can be improved)
+    new_loan.id = rand() % 1000000;
     new_loan.user_id = user_id;
     new_loan.amount = amount;
-    new_loan.status = 0;  // Status 0: Pending
-    new_loan.employee_id = -1;  // Initialize employee_id to -1 or any default value
+    new_loan.status = 0;  // Pending status
 
-    if (fwrite(&new_loan, sizeof(Loan), 1, fp) != 1) {
-        perror("Failed to write new loan to database");
+    // Write loan to the file
+    fprintf(fp, "%d %d %.2f %d\n", new_loan.id, new_loan.user_id, new_loan.amount, new_loan.status);
+    fclose(fp);
+
+    printf("Loan application successful. Loan ID: %d\n", new_loan.id);
+    return new_loan.id;
+}
+
+int process_approve_reject_loan(int loan_id, int decision, int client_socket) {
+    FILE *fp = fopen(LOAN_DB, "r");
+    if (fp == NULL) {
+        perror("Failed to open loans database");
+        return -1;
+    }
+
+    FILE *temp_fp = fopen("temp_loans.dat", "w");
+    if (temp_fp == NULL) {
+        perror("Failed to open temporary loans database");
         fclose(fp);
         return -1;
     }
 
-    fclose(fp);
-    printf("Loan application submitted successfully. Loan ID: %d\n", new_loan.id);
-    return new_loan.id;
-}
-
-int process_loan(int loan_id, int employee_id) {
-    // TODO: Implement loan processing logic
-
-    FILE *fp = fopen(LOAN_DB, "r+b");
-    if (fp == NULL) {
-        perror("Failed to open loans database");
-        return -1;
-    }
-
-    flock(fileno(fp), LOCK_EX);  // Lock file for safe read/write
-
     Loan loan;
-    while (fread(&loan, sizeof(Loan), 1, fp)) {
+    int found = 0;
+    while (fscanf(fp, "%d %d %lf %d", &loan.id, &loan.user_id, &loan.amount, &loan.status) != EOF) {
         if (loan.id == loan_id) {
-            // Loan found, now it’s being processed by the employee
-            printf("Loan ID %d is being processed by Employee ID %d\n", loan_id, employee_id);
-            // Here, we could add more processing logic (e.g., verifying loan documents)
-            flock(fileno(fp), LOCK_UN);  // Unlock the file
-            fclose(fp);
-            return 0;
-        }
-    }
-
-    printf("Loan ID %d not found.\n", loan_id);
-    flock(fileno(fp), LOCK_UN);  // Unlock file in case of failure
-    fclose(fp);
-    return -1;
-}
-
-int approve_reject_loan(int loan_id, int manager_id, int decision) {
-    // TODO: Implement loan approval/rejection logic
-
-    FILE *fp = fopen(LOAN_DB, "r+b");
-    if (fp == NULL) {
-        perror("Failed to open loans database");
-        return -1;
-    }
-
-    flock(fileno(fp), LOCK_EX);  // Lock file for safe read/write
-
-    Loan loan;
-    while (fread(&loan, sizeof(Loan), 1, fp)) {
-        if (loan.id == loan_id) {
+            found = 1;
             if (decision == 1) {
-                loan.status = 1;  // Status 1: Approved
-                printf("Loan ID %d approved by Manager ID %d\n", loan_id, manager_id);
+                // Approve the loan (remove it from file)
+                loan.status = 1;
+                const char *success_message = "Loan ID approved.\n";
+                send(client_socket, success_message, strlen(success_message), 0);
             } else if (decision == 2) {
-                loan.status = 2;  // Status 2: Rejected
-                printf("Loan ID %d rejected by Manager ID %d\n", loan_id, manager_id);
-            } else {
-                printf("Invalid decision. Use 1 for approval, 2 for rejection.\n");
-                flock(fileno(fp), LOCK_UN);  // Unlock the file
-                fclose(fp);
-                return -1;
+                // Reject the loan, but keep it in the file
+                loan.status = 2;
+                const char *rejected_message = "Loan ID rejected.\n";
+                send(client_socket, rejected_message, strlen(rejected_message), 0);
+                fprintf(temp_fp, "%d %d %.2f %d\n", loan.id, loan.user_id, loan.amount, loan.status);
             }
-
-            fseek(fp, -sizeof(Loan), SEEK_CUR);  // Move file pointer back to update loan
-            fwrite(&loan, sizeof(Loan), 1, fp);
-            flock(fileno(fp), LOCK_UN);  // Unlock the file
-            fclose(fp);
-            return 0;
+        } else {
+            // Keep all other loans unchanged
+            fprintf(temp_fp, "%d %d %.2f %d\n", loan.id, loan.user_id, loan.amount, loan.status);
         }
     }
 
-    printf("Loan ID %d not found.\n", loan_id);
-    flock(fileno(fp), LOCK_UN);  // Unlock file in case of failure
     fclose(fp);
-    return -1;
+    fclose(temp_fp);
+
+    // Replace old loan file with the new temp file
+    remove(LOAN_DB);
+    rename("temp_loans.dat", LOAN_DB);
+
+    if (found == 0) {
+        const char *fail_message = "Loan ID not found.\n";
+        send(client_socket, fail_message, strlen(fail_message), 0);
+        return -1;
+    }
+
+    const char *processed_message = "Loan processed successfully.\n";
+    send(client_socket, processed_message, strlen(processed_message), 0);
+
+    return 0;
 }
 
-void view_assigned_loans(int employee_id) {
-    FILE *fp = fopen(LOAN_DB, "rb");
+void view_all_loans(int client_socket) {
+    FILE *fp = fopen(LOAN_DB, "r");
     if (fp == NULL) {
-        perror("Failed to open loan database");
+        perror("Failed to open loans database");
         return;
     }
 
     Loan loan;
-    printf("Assigned Loan Applications:\n");
-    while (fread(&loan, sizeof(Loan), 1, fp)) {
-        if (loan.employee_id == employee_id) {  // Check if the loan is assigned to this employee
-            printf("Loan ID: %d, User ID: %d, Amount: %.2f, Status: %d\n",
-                   loan.id, loan.user_id, loan.amount, loan.status);
-        }
+    char buffer[256];
+    const char *header = "All Loan Applications:\n";
+    send(client_socket, header, strlen(header), 0);
+
+    while (fscanf(fp, "%d %d %lf %d", &loan.id, &loan.user_id, &loan.amount, &loan.status) != EOF) {
+        snprintf(buffer, sizeof(buffer), "Loan ID: %d, Amount: %.2f, Status: %d\n", loan.id, loan.amount, loan.status);
+        send(client_socket, buffer, strlen(buffer), 0);
     }
+
     fclose(fp);
+    const char *end_message = "All loans displayed.\n";
+    send(client_socket, end_message, strlen(end_message), 0);
 }

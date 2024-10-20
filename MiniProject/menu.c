@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/socket.h>
+#include <ctype.h>
 #include "account_operations.h"  // For balance, deposit, and withdraw
 #include "transaction_history.h" // For viewing transaction history
 #include "feedback.h"            // For adding feedback
@@ -14,6 +15,26 @@
 
 #define USER_DB "users.dat"
 #define LOAN_DB "loans.dat"
+
+// Function to trim leading and trailing spaces or newline characters from a string
+void trim_input(char *str) {
+    // Trim trailing spaces or newlines
+    int length = strlen(str);
+    while (length > 0 && (str[length - 1] == ' ' || str[length - 1] == '\n' || str[length - 1] == '\t')) {
+        str[length - 1] = '\0';
+        length--;
+    }
+
+    // Trim leading spaces
+    char *start = str;
+    while (*start && isspace(*start)) {
+        start++;
+    }
+
+    if (start != str) {
+        memmove(str, start, strlen(start) + 1);
+    }
+}
 
 int display_customer_menu(int client_socket, int account_id)
 {
@@ -28,9 +49,12 @@ int display_customer_menu(int client_socket, int account_id)
                            "2. Deposit Money\n"
                            "3. Withdraw Money\n"
                            "4. View Transaction History\n"
-                           "5. Add Feedback\n"
-                           "6. Logout\n"
-                           "7. Exit\n"
+                           "5. Apply for loan\n"
+                           "6. Transfer Funds\n"    // Added transfer option
+                           "7. Add Feedback\n"
+                           "8. Change password\n"
+                           "9. Logout\n"
+                           "10. Exit\n"
                            "Select an option: ";
         send(client_socket, menu, strlen(menu), 0);
 
@@ -56,16 +80,13 @@ int display_customer_menu(int client_socket, int account_id)
             print_all_accounts();
             break;
         }
-       case 2:
-        {
-            // Deposit money
-            print_all_accounts();
+       case 2: {  // Deposit money
+            print_all_accounts(); // Show accounts
             const char *deposit_prompt = "Enter amount to deposit: ";
             send(client_socket, deposit_prompt, strlen(deposit_prompt), 0);
 
             bytes_read = recv(client_socket, buffer, sizeof(buffer), 0);
-            if (bytes_read <= 0)
-            {
+            if (bytes_read <= 0) {
                 perror("Error receiving data from client");
                 close(client_socket);
                 return -1; // Error case
@@ -73,49 +94,37 @@ int display_customer_menu(int client_socket, int account_id)
             buffer[bytes_read] = '\0';
             double amount = atof(buffer);
 
-            // Call deposit function with user_id
-            if (deposit(user_id, amount) == 0) // Use user_id here instead of account_id
-            {
-                // Add transaction after successful deposit
-                add_transaction(user_id, amount, "Deposit"); // You may need to adjust this if your add_transaction function requires account_id
-
+            // Call deposit with the correct user_id and client_socket
+            if (deposit(account_id, amount, client_socket) == 0) {
+                add_transaction(account_id, amount, "Deposit");  // Ensure account_id or user_id is used correctly
                 const char *success_msg = "Deposit successful.\n";
                 send(client_socket, success_msg, strlen(success_msg), 0);
-            }
-            else
-            {
+            } else {
                 const char *error_msg = "Deposit failed. Please try again.\n";
                 send(client_socket, error_msg, strlen(error_msg), 0);
             }
             break;
         }
-        case 3:
-        {
-            print_all_accounts();
-            // Withdraw money
+        case 3: {  // Withdraw money
+            print_all_accounts();  // Show accounts
             const char *withdraw_prompt = "Enter amount to withdraw: ";
             send(client_socket, withdraw_prompt, strlen(withdraw_prompt), 0);
 
             bytes_read = recv(client_socket, buffer, sizeof(buffer), 0);
-            if (bytes_read <= 0)
-            {
+            if (bytes_read <= 0) {
                 perror("Error receiving data from client");
                 close(client_socket);
-                return -1; // Error case
+                return -1;  // Error case
             }
             buffer[bytes_read] = '\0';
             double amount = atof(buffer);
 
-            if (withdraw(account_id, amount) == 0)
-            {
-                // Add transaction after successful withdrawal
-                add_transaction(account_id, amount, "Withdrawal");
-
+            // Call withdraw with the correct user_id and client_socket
+            if (withdraw(account_id, amount, client_socket) == 0) {  // Make sure to pass client_socket
+                add_transaction(account_id, amount, "Withdrawal");  // Ensure account_id is used correctly
                 const char *success_msg = "Withdrawal successful.\n";
                 send(client_socket, success_msg, strlen(success_msg), 0);
-            }
-            else
-            {
+            } else {
                 const char *error_msg = "Withdrawal failed. Please try again.\n";
                 send(client_socket, error_msg, strlen(error_msg), 0);
             }
@@ -132,7 +141,68 @@ int display_customer_menu(int client_socket, int account_id)
             view_history(account_id, client_socket);  // Use the actual account ID
             break;
         }
-        case 5:
+
+        case 5: 
+        {  
+            // Apply for Loan
+            const char *loan_prompt = "Enter loan amount: ";
+            send(client_socket, loan_prompt, strlen(loan_prompt), 0);
+
+            bytes_read = recv(client_socket, buffer, sizeof(buffer), 0);
+            if (bytes_read <= 0) {
+                perror("Error receiving data from client");
+                close(client_socket);
+                return -1; // Error case
+            }
+            buffer[bytes_read] = '\0';
+            double loan_amount = atof(buffer);
+
+            // Call the apply_for_loan function
+            int loan_id = apply_for_loan(account_id, loan_amount);
+            if (loan_id > 0) {
+                char success_msg[128];
+                snprintf(success_msg, sizeof(success_msg), "Loan application successful. Loan ID: %d\n", loan_id);
+                send(client_socket, success_msg, strlen(success_msg), 0);
+            } else {
+                const char *error_msg = "Loan application failed. Please try again.\n";
+                send(client_socket, error_msg, strlen(error_msg), 0);
+            }
+            break;
+        }
+
+        case 6:
+        {
+            // Transfer funds logic
+            int to_account_id;
+            double amount;
+
+            // Prompt for receiver account ID
+            const char *prompt_receiver = "Enter the account ID to transfer funds to: ";
+            send(client_socket, prompt_receiver, strlen(prompt_receiver), 0);
+            recv(client_socket, buffer, sizeof(buffer), 0);
+            to_account_id = atoi(buffer);
+
+            // Prompt for transfer amount
+            const char *prompt_amount = "Enter the amount to transfer: ";
+            send(client_socket, prompt_amount, strlen(prompt_amount), 0);
+            recv(client_socket, buffer, sizeof(buffer), 0);
+            amount = atof(buffer);
+
+            // Perform transfer
+            if (transfer(account_id, to_account_id, amount) == 0)
+            {
+                const char *success_message = "Funds transferred successfully.\n";
+                send(client_socket, success_message, strlen(success_message), 0);
+            }
+            else
+            {
+                const char *error_message = "Failed to transfer funds. Please check the details.\n";
+                send(client_socket, error_message, strlen(error_message), 0);
+            }
+        }
+        break;
+
+        case 7:
         {
             // Add feedback
             const char *feedback_prompt = "Enter your feedback: ";
@@ -151,21 +221,44 @@ int display_customer_menu(int client_socket, int account_id)
             send(client_socket, feedback_success_msg, strlen(feedback_success_msg), 0);
             break;
         }
-        case 6:
-        {
-            // Logout
-            const char *logout_msg = "You have been logged out.\n";
-            send(client_socket, logout_msg, strlen(logout_msg), 0);
-            // Handle logout logic if needed
+        case 8: 
+        {  
+            // Change password
+            char old_password[128], new_password[128];
+
+            // Ask for old password
+            const char *old_pass_prompt = "Enter current password: ";
+            send(client_socket, old_pass_prompt, strlen(old_pass_prompt), 0);
+            bytes_read = recv(client_socket, old_password, sizeof(old_password), 0);
+            old_password[bytes_read] = '\0';
+            trim_newline(old_password);  // Trim newline
+
+            // Ask for new password
+            const char *new_pass_prompt = "Enter new password: ";
+            send(client_socket, new_pass_prompt, strlen(new_pass_prompt), 0);
+            bytes_read = recv(client_socket, new_password, sizeof(new_password), 0);
+            new_password[bytes_read] = '\0';
+            trim_newline(new_password);  // Trim newline
+
+            // Change password for the currently logged-in user
+            if (change_password(account_id, old_password, new_password, client_socket)) {
+                const char *success_msg = "Password changed successfully.\n";
+                send(client_socket, success_msg, strlen(success_msg), 0);
+            } else {
+                const char *error_msg = "Failed to change password. Please check your current password and try again.\n";
+                send(client_socket, error_msg, strlen(error_msg), 0);
+            }
             break;
         }
-        case 7:
+        case 9:
         {
-            // Exit
-            const char *exit_msg = "Exiting...\n";
-            send(client_socket, exit_msg, strlen(exit_msg), 0);
-            close(client_socket);
-            exit(0); // Exit the program
+            send(client_socket, "Logging out...\n\n", 15, 0);
+            return 1; // Return value for logout
+        }
+        case 10:
+        {
+            send(client_socket, "Exiting...\n\n", 11, 0);
+            return 2; // Return value for exit
         }
 
         default:
@@ -178,37 +271,16 @@ int display_customer_menu(int client_socket, int account_id)
     return 0; // This line won't be reached due to the loop, but it's good practice to return an int.
 }
 
-void register_customer(int client_socket, int user_id) {
-    int account_id;
-    char buffer[1024];
-    double initial_balance;
-    
-    // Generate a new account ID
-    account_id = get_new_account_id();
+int read_input_from_socket(int client_socket) {
+    char buffer[256];
+    memset(buffer, 0, sizeof(buffer));  // Clear the buffer
 
-    // Ask for initial balance for the customer through the socket
-    const char *prompt_balance = "Enter initial balance for customer: ";
-    send(client_socket, prompt_balance, strlen(prompt_balance), 0);
-
-    // Receive the initial balance from the client
-    int bytes_read = recv(client_socket, buffer, sizeof(buffer), 0);
-    if (bytes_read <= 0) {
-        printf("Error receiving initial balance.\n");
-        return;
-    }
-    buffer[bytes_read] = '\0';  // Null-terminate the input
-    initial_balance = atof(buffer);  // Convert the received string to a double
-
-    // Create the account for the new user with the initial balance
-    int result = create_account(account_id, user_id, initial_balance);
-    if (result == 0) {
-        const char *success_message = "Account successfully created.\n";
-        send(client_socket, success_message, strlen(success_message), 0);
-        printf("Account successfully created for User ID %d with Account ID %d.\n", user_id, account_id);
+    // Read from the socket
+    int bytes_read = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
+    if (bytes_read > 0) {
+        return atoi(buffer);  // Convert to integer
     } else {
-        const char *failure_message = "Failed to create account.\n";
-        send(client_socket, failure_message, strlen(failure_message), 0);
-        printf("Failed to create account for User ID %d.\n", user_id);
+        return -1;  // Error reading input
     }
 }
 
@@ -224,9 +296,9 @@ int display_employee_menu(int client_socket, int user_id)
         const char *menu = "\nEmployee Menu:\n"
                            "1. Add New Customer\n"
                            "2. Modify Customer Details\n"
-                           "3. Process Loan Applications\n"
-                           "4. Approve/Reject Loans\n"
-                           "5. View Assigned Loan Applications\n"
+                           "3. Approve/Reject Loans\n"
+                           "4. View Assigned Loan Applications\n"
+                           "5. View Customer Transactions\n" 
                            "6. Change Password\n"
                            "7. Logout\n"
                            "8. Exit\n"
@@ -246,9 +318,10 @@ int display_employee_menu(int client_socket, int user_id)
 
         switch (choice)
         {
-        case 1:
-        {
+        case 1: {
             User new_customer;
+
+            new_customer.active = 1;
 
             // Get customer username
             const char *prompt_username = "Enter customer username: ";
@@ -268,166 +341,167 @@ int display_employee_menu(int client_socket, int user_id)
             bytes_read = recv(client_socket, buffer, sizeof(buffer), 0);
             new_customer.role = atoi(buffer);
 
-            // Add new customer
-            if (add_new_customer(&new_customer) == 0)
-            {
-                const char *success_message = "Customer added successfully.\n";
-                send(client_socket, success_message, strlen(success_message), 0);
+            // Get customer name
+            const char *prompt_name = "Enter customer name: ";
+            send(client_socket, prompt_name, strlen(prompt_name), 0);
+            bytes_read = recv(client_socket, buffer, sizeof(buffer), 0);
+            buffer[bytes_read] = '\0';
+            char name[100];
+            strncpy(name, buffer, sizeof(name));
 
-                // Register the account for the new customer (asks for initial balance)
-                register_customer(client_socket, new_customer.id); // Pass the client_socket to handle I/O
-            }
-            else
-            {
+            // Get customer mobile number
+            const char *prompt_mobile = "Enter customer mobile number: ";
+            send(client_socket, prompt_mobile, strlen(prompt_mobile), 0);
+            bytes_read = recv(client_socket, buffer, sizeof(buffer), 0);
+            buffer[bytes_read] = '\0';
+            char mobile[15];
+            strncpy(mobile, buffer, sizeof(mobile));
+
+            // Assign new unique user_id
+            new_customer.id = get_new_user_id();          // Generate a new user ID
+
+            // Add new customer
+            if (add_new_customer(&new_customer) == 0) {
+                // Create the account with the unique user_id and initial balance
+                if (create_account(new_customer.id, 0.0, name, mobile) == 0) {
+                    char success_message[256];
+                    snprintf(success_message, sizeof(success_message), 
+                            "Customer added successfully with account ID: %d.\n", new_customer.id); // Adjust based on how account IDs are generated
+                    send(client_socket, success_message, strlen(success_message), 0);
+                } else {
+                    const char *failure_message = "Failed to create account.\n";
+                    send(client_socket, failure_message, strlen(failure_message), 0);
+                }
+            } else {
                 const char *failure_message = "Failed to add customer.\n";
                 send(client_socket, failure_message, strlen(failure_message), 0);
             }
-
             break;
         }
-        case 2:
-        {
-            int customer_id;
-            User updated_details;
+        
+        case 2: {  // Modify Customer Details
+            const char *prompt_account_id = "Enter the customer's account ID: ";
+            send(client_socket, prompt_account_id, strlen(prompt_account_id), 0);
 
-            // Get customer ID to modify
-            const char *prompt_id = "Enter customer ID to modify: ";
-            send(client_socket, prompt_id, strlen(prompt_id), 0);
             bytes_read = recv(client_socket, buffer, sizeof(buffer), 0);
-            customer_id = atoi(buffer);
+            buffer[bytes_read] = '\0';
+            int account_id = atoi(buffer);  // Get account ID
 
-            // Get new customer username
-            const char *prompt_username = "Enter new username: ";
-            send(client_socket, prompt_username, strlen(prompt_username), 0);
-            bytes_read = recv(client_socket, updated_details.username, sizeof(updated_details.username), 0);
-            updated_details.username[bytes_read] = '\0';
-
-            // Get new customer password
-            const char *prompt_password = "Enter new password: ";
-            send(client_socket, prompt_password, strlen(prompt_password), 0);
-            bytes_read = recv(client_socket, updated_details.password, sizeof(updated_details.password), 0);
-            updated_details.password[bytes_read] = '\0';
-
-            // Get new role
-            const char *prompt_role = "Enter new role (0 for customer, 1 for employee): ";
-            send(client_socket, prompt_role, strlen(prompt_role), 0);
+            // Ask for the new name
+            const char *prompt_name = "Enter new customer name: ";
+            send(client_socket, prompt_name, strlen(prompt_name), 0);
             bytes_read = recv(client_socket, buffer, sizeof(buffer), 0);
-            updated_details.role = atoi(buffer);
+            buffer[bytes_read] = '\0';
+            char new_name[100];
+            strncpy(new_name, buffer, sizeof(new_name));
 
-            // Modify customer details
-            if (modify_user_details(customer_id, &updated_details) == 0)
-            {
-                const char *success_message = "Customer details modified successfully.\n";
-                send(client_socket, success_message, strlen(success_message), 0);
-            }
-            else
-            {
-                const char *failure_message = "Failed to modify customer details.\n";
-                send(client_socket, failure_message, strlen(failure_message), 0);
+            // Ask for the new mobile number
+            const char *prompt_mobile = "Enter new customer mobile number: ";
+            send(client_socket, prompt_mobile, strlen(prompt_mobile), 0);
+            bytes_read = recv(client_socket, buffer, sizeof(buffer), 0);
+            buffer[bytes_read] = '\0';
+            char new_mobile[15];
+            strncpy(new_mobile, buffer, sizeof(new_mobile));
+
+            // Modify the info.txt file for the given account_id (set is_employee = 0 for customer)
+            if (modify_user_info(account_id, new_name, new_mobile, 0) == 0) {
+                const char *success_msg = "Customer details updated successfully.\n";
+                send(client_socket, success_msg, strlen(success_msg), 0);
+            } else {
+                const char *error_msg = "Failed to update customer details.\n";
+                send(client_socket, error_msg, strlen(error_msg), 0);
             }
             break;
         }
-        case 3:
+        case 3:  // Approve/Reject Loans
         {
-            int loan_id;
+            int loan_id, decision;
 
-            // Get loan ID to process
-            const char *prompt_loan_id = "Enter Loan ID to process: ";
-            send(client_socket, prompt_loan_id, strlen(prompt_loan_id), 0);
-            bytes_read = recv(client_socket, buffer, sizeof(buffer), 0);
-            loan_id = atoi(buffer);
+            // Send prompt to Terminal 2
+            const char *prompt_message = "Enter Loan ID to process: ";
+            send(client_socket, prompt_message, strlen(prompt_message), 0);
 
-            // Process loan
-            if (process_loan(loan_id, employee_id) == 0)
-            {
+            // Read Loan ID from Terminal 2
+            // You need to implement a function to read the input from the socket
+            loan_id = read_input_from_socket(client_socket);  // This function needs to be implemented
+
+            // Send prompt to Terminal 2 for decision
+            const char *decision_prompt = "Enter 1 to approve or 2 to reject: ";
+            send(client_socket, decision_prompt, strlen(decision_prompt), 0);
+
+            // Read decision from Terminal 2
+            decision = read_input_from_socket(client_socket);  // This function needs to be implemented
+
+            // Process the loan with the decision
+            if (process_approve_reject_loan(loan_id, decision, client_socket) == 0) {
                 const char *success_message = "Loan processed successfully.\n";
                 send(client_socket, success_message, strlen(success_message), 0);
-            }
-            else
-            {
-                const char *failure_message = "Failed to process loan.\n";
-                send(client_socket, failure_message, strlen(failure_message), 0);
+            } else {
+                const char *fail_message = "Failed to process loan.\n";
+                send(client_socket, fail_message, strlen(fail_message), 0);
             }
             break;
         }
-        case 4:
+        case 4:  // View All Loans
         {
-            int loan_id, manager_id, decision;
-
-            // Get loan ID to approve/reject
-            const char *prompt_loan_id = "Enter Loan ID to approve/reject: ";
-            send(client_socket, prompt_loan_id, strlen(prompt_loan_id), 0);
-            bytes_read = recv(client_socket, buffer, sizeof(buffer), 0);
-            loan_id = atoi(buffer);
-
-            // Get manager ID
-            const char *prompt_manager_id = "Enter your manager ID: ";
-            send(client_socket, prompt_manager_id, strlen(prompt_manager_id), 0);
-            bytes_read = recv(client_socket, buffer, sizeof(buffer), 0);
-            manager_id = atoi(buffer);
-
-            // Get decision (1 for approve, 2 for reject)
-            const char *prompt_decision = "Enter 1 to approve or 2 to reject: ";
-            send(client_socket, prompt_decision, strlen(prompt_decision), 0);
-            bytes_read = recv(client_socket, buffer, sizeof(buffer), 0);
-            decision = atoi(buffer);
-
-            // Approve/reject loan
-            if (approve_reject_loan(loan_id, manager_id, decision) == 0)
-            {
-                const char *success_message = "Loan processed successfully.\n";
-                send(client_socket, success_message, strlen(success_message), 0);
-            }
-            else
-            {
-                const char *failure_message = "Failed to process loan.\n";
-                send(client_socket, failure_message, strlen(failure_message), 0);
-            }
+            view_all_loans(client_socket);  // Display all loans with ID, Amount, and Status on Terminal 2
+            const char *success_message = "All loans displayed.\n";
+            send(client_socket, success_message, strlen(success_message), 0);
             break;
         }
-        case 5:
+        case 5: // View customer transactions
         {
-            const char *view_message = "Viewing assigned loan applications...\n";
-            send(client_socket, view_message, strlen(view_message), 0);
+            char account_id_str[128];
+            const char *prompt = "Enter the customer account ID to view transactions: ";
+            send(client_socket, prompt, strlen(prompt), 0);
 
-            // View assigned loans for the employee
-            view_assigned_loans(employee_id);
+            // Receive the account ID from the employee
+            bytes_read = recv(client_socket, account_id_str, sizeof(account_id_str), 0);
+            account_id_str[bytes_read] = '\0';
+            int account_id = atoi(account_id_str); // Convert the input to an integer
+
+            // View the customer's transaction history
+            view_history(account_id, client_socket);
             break;
         }
-        case 6:
-        {
-            char old_password[50], new_password[50];
 
-            // Get old password
-            const char *prompt_old_password = "Enter your old password: ";
-            send(client_socket, prompt_old_password, strlen(prompt_old_password), 0);
+        case 6: 
+        {
+            char old_password[128], new_password[128];
+
+            // Ask for old password
+            const char *old_pass_prompt = "Enter current password: ";
+            send(client_socket, old_pass_prompt, strlen(old_pass_prompt), 0);
             bytes_read = recv(client_socket, old_password, sizeof(old_password), 0);
             old_password[bytes_read] = '\0';
+            trim_input(old_password);  // Trim input
 
-            // Get new password
-            const char *prompt_new_password = "Enter your new password: ";
-            send(client_socket, prompt_new_password, strlen(prompt_new_password), 0);
+            // Ask for new password
+            const char *new_pass_prompt = "Enter new password: ";
+            send(client_socket, new_pass_prompt, strlen(new_pass_prompt), 0);
             bytes_read = recv(client_socket, new_password, sizeof(new_password), 0);
             new_password[bytes_read] = '\0';
+            trim_input(new_password);  // Trim input
 
-            // Change password
-            if (change_password(user_id, old_password, new_password) == 0)
-            {
-                const char *success_message = "Password changed successfully.\n";
-                send(client_socket, success_message, strlen(success_message), 0);
-            }
-            else
-            {
-                const char *failure_message = "Failed to change password.\n";
-                send(client_socket, failure_message, strlen(failure_message), 0);
+            // Debug log for passwords
+            printf("Attempting to change password for user ID: %d\n", user_id);
+            printf("Entered old password: '%s', new password: '%s'\n", old_password, new_password);
+
+            // Change password for the currently logged-in user
+            if (change_password(user_id, old_password, new_password, client_socket)) {
+                const char *success_msg = "Password changed successfully.\n";
+                send(client_socket, success_msg, strlen(success_msg), 0);
+            } else {
+                const char *error_msg = "Failed to change password. Please check your current password and try again.\n";
+                send(client_socket, error_msg, strlen(error_msg), 0);
             }
             break;
         }
         case 7:
-            send(client_socket, "Logging out...\n", 15, 0);
+            send(client_socket, "Logging out...\n\n", 15, 0);
             return 1; // Return value for logout
         case 8:
-            send(client_socket, "Exiting...\n", 11, 0);
+            send(client_socket, "Exiting...\n\n", 11, 0);
             return 2; // Return value for exit
         default:
             send(client_socket, "Invalid choice. Please try again.\n", 34, 0);
@@ -436,7 +510,7 @@ int display_employee_menu(int client_socket, int user_id)
     }
 }
 
-int display_manager_menu(int client_socket)
+int display_manager_menu(int client_socket, int user_id)
 {
     int choice;
     char buffer[1024];
@@ -445,10 +519,11 @@ int display_manager_menu(int client_socket)
     {
         // Send the Manager Menu to the client
         const char *menu = "\nManager Menu:\n"
-                           "1. Review Customer Feedback\n"
-                           "2. Change Password\n"
-                           "3. Logout\n"
-                           "4. Exit\n"
+                           "1. Activate/Deactivate Customer Accounts\n"
+                           "2. Review Customer Feedback\n"
+                           "3. Change Password\n"
+                           "4. Logout\n"
+                           "5. Exit\n"
                            "Enter your choice: ";
         send(client_socket, menu, strlen(menu), 0);
 
@@ -465,21 +540,38 @@ int display_manager_menu(int client_socket)
 
         switch (choice)
         {
-        /*
         case 1: {
             int user_id, status;
-            printf("Enter customer user ID to activate/deactivate: ");
-            scanf("%d", &user_id);
-            printf("Enter status (1 to activate, 0 to deactivate): ");
-            scanf("%d", &status);
-            // Call function to activate/deactivate customer accounts
-            if (activate_deactivate_account(user_id, status) == 0) {
-                printf("Customer account updated successfully.\n");
+            char prompt[256];
+
+            // Prompt for user ID
+            snprintf(prompt, sizeof(prompt), "Enter customer user ID to activate/deactivate: ");
+            send(client_socket, prompt, strlen(prompt), 0);
+            bytes_read = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
+            buffer[bytes_read] = '\0';
+            user_id = atoi(buffer);
+
+            // Prompt for status (activate/deactivate)
+            snprintf(prompt, sizeof(prompt), "Enter status (1 to activate, 0 to deactivate): ");
+            send(client_socket, prompt, strlen(prompt), 0);
+            bytes_read = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
+            buffer[bytes_read] = '\0';
+            status = atoi(buffer);
+
+            // Call function to update user status
+            update_user_status(user_id, status); // Call the new function
+            
+            // Send confirmation message to the client
+            if (status == 1) {
+                const char *success_message = "Customer account activated successfully.\n";
+                send(client_socket, success_message, strlen(success_message), 0);
             } else {
-                printf("Failed to update customer account.\n");
+                const char *success_message = "Customer account deactivated successfully.\n";
+                send(client_socket, success_message, strlen(success_message), 0);
             }
             break;
         }
+        /*
         case 2: {
             int loan_id, employee_id;
             printf("Enter Loan ID to assign: ");
@@ -495,56 +587,60 @@ int display_manager_menu(int client_socket)
             break;
         }
         */
-        case 1:
-        {
-            // Review customer feedback
+        case 2: {
             const char *review_message = "Reviewing customer feedback...\n";
             send(client_socket, review_message, strlen(review_message), 0);
-            review_customer_feedback(); // Call function to review customer feedback
+
+            // Request the customer ID from the manager
+            const char *request_id_message = "Enter Customer ID to view feedback: ";
+            send(client_socket, request_id_message, strlen(request_id_message), 0);
+
+            // Receive customer ID from manager
+            int customer_id;
+            recv(client_socket, &customer_id, sizeof(customer_id), 0);
+
+            // Call function to review customer feedback based on customer ID
+            review_customer_feedback(client_socket, customer_id);
+
             break;
         }
-        case 2:
-        {
-            int user_id;
-            char old_password[50], new_password[50];
 
-            // Prompt for user ID
-            const char *prompt_user_id = "Enter your user ID: ";
-            send(client_socket, prompt_user_id, strlen(prompt_user_id), 0);
-            bytes_read = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
-            user_id = atoi(buffer);
+        case 3: {
+            char old_password[128], new_password[128];
 
-            // Prompt for old password
-            const char *prompt_old_password = "Enter your old password: ";
-            send(client_socket, prompt_old_password, strlen(prompt_old_password), 0);
+            // Ask for old password
+            const char *old_pass_prompt = "Enter current password: ";
+            send(client_socket, old_pass_prompt, strlen(old_pass_prompt), 0);
             bytes_read = recv(client_socket, old_password, sizeof(old_password), 0);
             old_password[bytes_read] = '\0';
+            trim_input(old_password);  // Trim input
 
-            // Prompt for new password
-            const char *prompt_new_password = "Enter your new password: ";
-            send(client_socket, prompt_new_password, strlen(prompt_new_password), 0);
+            // Ask for new password
+            const char *new_pass_prompt = "Enter new password: ";
+            send(client_socket, new_pass_prompt, strlen(new_pass_prompt), 0);
             bytes_read = recv(client_socket, new_password, sizeof(new_password), 0);
             new_password[bytes_read] = '\0';
+            trim_input(new_password);  // Trim input
 
-            // Change the password
-            if (change_password(user_id, old_password, new_password) == 0)
-            {
-                const char *success_message = "Password changed successfully.\n";
-                send(client_socket, success_message, strlen(success_message), 0);
-            }
-            else
-            {
-                const char *error_message = "Failed to change password.\n";
-                send(client_socket, error_message, strlen(error_message), 0);
+            // Call change_password with the current user_id
+            if (change_password(user_id, old_password, new_password, client_socket)) {
+                const char *success_msg = "Password changed successfully.\n";
+                send(client_socket, success_msg, strlen(success_msg), 0);
+            } else {
+                const char *error_msg = "Failed to change password. Please check your current password and try again.\n";
+                send(client_socket, error_msg, strlen(error_msg), 0);
             }
             break;
         }
-        case 3:
-            send(client_socket, "Logging out...\n", 15, 0);
-            return 1; // Return value for logout
+
         case 4:
-            send(client_socket, "Exiting...\n", 11, 0);
+            send(client_socket, "Logging out...\n\n", 15, 0);
+            return 1; // Return value for logout
+
+        case 5:
+            send(client_socket, "Exiting...\n\n", 11, 0);
             return 2; // Return value for exit
+
         default:
             send(client_socket, "Invalid choice. Please try again.\n", 34, 0);
             break;
@@ -562,9 +658,9 @@ int display_admin_menu(int client_socket)
         // Send the Administrator Menu to the client
         const char *menu = "\nAdministrator Menu:\n"
                            "1. Add New Bank Employee\n"
-                           "2. Modify Customer/Employee Details\n"
-                           "3. Manage User Roles\n"
-                           "4. Change Password\n"
+                           "2. Add New Bank Manager\n"
+                           "3. Modify Customer/Employee Details\n"
+                           "4. Manage User Roles\n"
                            "5. Logout\n"
                            "6. Exit\n"
                            "Enter your choice: ";
@@ -583,15 +679,15 @@ int display_admin_menu(int client_socket)
 
         switch (choice)
         {
-        case 1:
-        { // Add New Employee
+        case 1: {  // Add New Employee
             User new_employee;
+            char name[100], mobile[15];
+            new_employee.active = 1;
             // Prompt for employee username
             const char *prompt_username = "Enter employee username: ";
             send(client_socket, prompt_username, strlen(prompt_username), 0);
             bytes_read = recv(client_socket, new_employee.username, sizeof(new_employee.username) - 1, 0);
-            if (bytes_read <= 0)
-            {
+            if (bytes_read <= 0) {
                 close(client_socket);
                 return -1; // Error case
             }
@@ -601,8 +697,7 @@ int display_admin_menu(int client_socket)
             const char *prompt_password = "Enter employee password: ";
             send(client_socket, prompt_password, strlen(prompt_password), 0);
             bytes_read = recv(client_socket, new_employee.password, sizeof(new_employee.password) - 1, 0);
-            if (bytes_read <= 0)
-            {
+            if (bytes_read <= 0) {
                 close(client_socket);
                 return -1; // Error case
             }
@@ -612,40 +707,111 @@ int display_admin_menu(int client_socket)
             const char *prompt_role = "Enter employee role (1 for employee): ";
             send(client_socket, prompt_role, strlen(prompt_role), 0);
             bytes_read = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
-            if (bytes_read <= 0)
-            {
+            if (bytes_read <= 0) {
                 close(client_socket);
                 return -1; // Error case
             }
             buffer[bytes_read] = '\0';
             new_employee.role = atoi(buffer);
 
-            // Debug: Confirm new employee details before adding
-            printf("New employee details: Username = %s, Password = %s, Role = %d\n",
-                   new_employee.username, new_employee.password, new_employee.role);
+            // Prompt for employee name
+            const char *prompt_name = "Enter employee name: ";
+            send(client_socket, prompt_name, strlen(prompt_name), 0);
+            bytes_read = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
+            if (bytes_read <= 0) {
+                close(client_socket);
+                return -1; // Error case
+            }
+            buffer[bytes_read] = '\0';
+            strncpy(name, buffer, sizeof(name));
+
+            // Prompt for employee mobile number
+            const char *prompt_mobile = "Enter employee mobile number: ";
+            send(client_socket, prompt_mobile, strlen(prompt_mobile), 0);
+            bytes_read = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
+            if (bytes_read <= 0) {
+                close(client_socket);
+                return -1; // Error case
+            }
+            buffer[bytes_read] = '\0';
+            strncpy(mobile, buffer, sizeof(mobile));
 
             // Add the new employee
-            if (add_new_employee(&new_employee) == 0)
-            {
+            if (add_new_employee(&new_employee, name, mobile) == 0) {
                 const char *success_message = "Bank employee added successfully.\n";
                 send(client_socket, success_message, strlen(success_message), 0);
-            }
-            else
-            {
+
+                // Send the newly created employee ID back
+                char employee_id_message[128];
+                sprintf(employee_id_message, "New employee ID: %d\n", new_employee.id);
+                send(client_socket, employee_id_message, strlen(employee_id_message), 0);
+            } else {
                 const char *error_message = "Failed to add bank employee.\n";
                 send(client_socket, error_message, strlen(error_message), 0);
             }
-
-            print_user_database();
             break;
         }
-        case 2:
-        {
-            int user_id;
-            User updated_details;
+        case 2: {  // Add New Manager
+            User new_manager;
 
-            // Prompt for user ID
-            const char *prompt_user_id = "Enter user ID to modify: ";
+            new_manager.active = 1;
+
+            // Prompt for manager username
+            const char *prompt_username = "Enter manager username: ";
+            send(client_socket, prompt_username, strlen(prompt_username), 0);
+            bytes_read = recv(client_socket, new_manager.username, sizeof(new_manager.username) - 1, 0);
+            if (bytes_read <= 0) {
+                close(client_socket);
+                return -1; // Error case
+            }
+            new_manager.username[bytes_read] = '\0';
+
+            // Prompt for manager password
+            const char *prompt_password = "Enter manager password: ";
+            send(client_socket, prompt_password, strlen(prompt_password), 0);
+            bytes_read = recv(client_socket, new_manager.password, sizeof(new_manager.password) - 1, 0);
+            if (bytes_read <= 0) {
+                close(client_socket);
+                return -1; // Error case
+            }
+            new_manager.password[bytes_read] = '\0';
+
+            // Manager's role is fixed as '2' (indicating a manager)
+            new_manager.role = 2; 
+
+            // Add the new manager
+            if (add_new_manager(&new_manager) == 0) {
+                const char *success_message = "Bank manager added successfully.\n";
+                send(client_socket, success_message, strlen(success_message), 0);
+
+                // Send the newly created manager ID back
+                char manager_id_message[128];
+                sprintf(manager_id_message, "New manager ID: %d\n", new_manager.id);
+                send(client_socket, manager_id_message, strlen(manager_id_message), 0);
+            } else {
+                const char *error_message = "Failed to add bank manager.\n";
+                send(client_socket, error_message, strlen(error_message), 0);
+            }
+            break;
+        }
+        case 3:
+        {
+            const char *prompt_modify_type = "Do you want to modify details for (1) Customer or (2) Employee? ";
+            send(client_socket, prompt_modify_type, strlen(prompt_modify_type), 0);
+            bytes_read = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
+            if (bytes_read <= 0)
+            {
+                close(client_socket);
+                return -1; // Error case
+            }
+            buffer[bytes_read] = '\0';
+            int modify_type = atoi(buffer);
+
+            int user_id;
+            char new_name[128], new_mobile[64];
+
+            // Prompt for User ID
+            const char *prompt_user_id = modify_type == 1 ? "Enter Customer Account ID to modify: " : "Enter Employee ID to modify: ";
             send(client_socket, prompt_user_id, strlen(prompt_user_id), 0);
             bytes_read = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
             if (bytes_read <= 0)
@@ -656,42 +822,30 @@ int display_admin_menu(int client_socket)
             buffer[bytes_read] = '\0';
             user_id = atoi(buffer);
 
-            // Prompt for new username
-            const char *prompt_new_username = "Enter new username: ";
-            send(client_socket, prompt_new_username, strlen(prompt_new_username), 0);
-            bytes_read = recv(client_socket, updated_details.username, sizeof(updated_details.username) - 1, 0);
+            // Prompt for new name
+            const char *prompt_new_name = "Enter new name: ";
+            send(client_socket, prompt_new_name, strlen(prompt_new_name), 0);
+            bytes_read = recv(client_socket, new_name, sizeof(new_name) - 1, 0);
             if (bytes_read <= 0)
             {
                 close(client_socket);
                 return -1; // Error case
             }
-            updated_details.username[bytes_read] = '\0';
+            new_name[bytes_read] = '\0';
 
-            // Prompt for new password
-            const char *prompt_new_password = "Enter new password: ";
-            send(client_socket, prompt_new_password, strlen(prompt_new_password), 0);
-            bytes_read = recv(client_socket, updated_details.password, sizeof(updated_details.password) - 1, 0);
+            // Prompt for new mobile number
+            const char *prompt_new_mobile = "Enter new mobile number: ";
+            send(client_socket, prompt_new_mobile, strlen(prompt_new_mobile), 0);
+            bytes_read = recv(client_socket, new_mobile, sizeof(new_mobile) - 1, 0);
             if (bytes_read <= 0)
             {
                 close(client_socket);
                 return -1; // Error case
             }
-            updated_details.password[bytes_read] = '\0';
+            new_mobile[bytes_read] = '\0';
 
-            // Prompt for new role
-            const char *prompt_new_role = "Enter new role (0 for customer, 1 for employee): ";
-            send(client_socket, prompt_new_role, strlen(prompt_new_role), 0);
-            bytes_read = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
-            if (bytes_read <= 0)
-            {
-                close(client_socket);
-                return -1; // Error case
-            }
-            buffer[bytes_read] = '\0';
-            updated_details.role = atoi(buffer);
-
-            // Modify user details
-            if (modify_user_details(user_id, &updated_details) == 0)
+            // Modify the user details (customer or employee)
+            if (modify_user_info(user_id, new_name, new_mobile, modify_type == 2) == 0) // modify_type == 2 means employee
             {
                 const char *success_message = "User details modified successfully.\n";
                 send(client_socket, success_message, strlen(success_message), 0);
@@ -703,7 +857,7 @@ int display_admin_menu(int client_socket)
             }
             break;
         }
-        case 3:
+        case 4:
         {
             int user_id, new_role;
 
@@ -711,96 +865,67 @@ int display_admin_menu(int client_socket)
             const char *prompt_user_id = "Enter user ID to change role: ";
             send(client_socket, prompt_user_id, strlen(prompt_user_id), 0);
             bytes_read = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
-            if (bytes_read <= 0)
-            {
+            if (bytes_read <= 0) {
                 close(client_socket);
-                return -1; // Error case
+                return -1; // Error receiving user ID
             }
             buffer[bytes_read] = '\0';
-            user_id = atoi(buffer);
+            user_id = atoi(buffer); // Convert user ID from string to integer
 
             // Prompt for new role
             const char *prompt_new_role = "Enter new role (0 for customer, 1 for employee): ";
             send(client_socket, prompt_new_role, strlen(prompt_new_role), 0);
             bytes_read = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
-            if (bytes_read <= 0)
-            {
+            if (bytes_read <= 0) {
                 close(client_socket);
-                return -1; // Error case
+                return -1; // Error receiving new role
             }
             buffer[bytes_read] = '\0';
-            new_role = atoi(buffer);
+            new_role = atoi(buffer); // Convert new role from string to integer
 
             // Change user role
-            if (change_user_role(user_id, new_role) == 0)
-            {
+            if (manage_user_roles(user_id, new_role) == 0) {
                 const char *success_message = "User role changed successfully.\n";
                 send(client_socket, success_message, strlen(success_message), 0);
-            }
-            else
-            {
-                const char *error_message = "Failed to change user role.\n";
+            } else {
+                const char *error_message = "Failed to change user role. Please check if the user ID exists.\n";
                 send(client_socket, error_message, strlen(error_message), 0);
             }
             break;
         }
-        case 4:
+        /*
+        case 4: 
         {
-            int user_id;
-            char old_password[50], new_password[50];
+            char old_password[128], new_password[128];
 
-            // Prompt for user ID
-            const char *prompt_user_id = "Enter your user ID: ";
-            send(client_socket, prompt_user_id, strlen(prompt_user_id), 0);
-            bytes_read = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
-            if (bytes_read <= 0)
-            {
-                close(client_socket);
-                return -1; // Error case
-            }
-            buffer[bytes_read] = '\0';
-            user_id = atoi(buffer);
-
-            // Prompt for old password
-            const char *prompt_old_password = "Enter your old password: ";
-            send(client_socket, prompt_old_password, strlen(prompt_old_password), 0);
-            bytes_read = recv(client_socket, old_password, sizeof(old_password) - 1, 0);
-            if (bytes_read <= 0)
-            {
-                close(client_socket);
-                return -1; // Error case
-            }
+            // Ask for old password
+            const char *old_pass_prompt = "Enter current password: ";
+            send(client_socket, old_pass_prompt, strlen(old_pass_prompt), 0);
+            bytes_read = recv(client_socket, old_password, sizeof(old_password), 0);
             old_password[bytes_read] = '\0';
 
-            // Prompt for new password
-            const char *prompt_new_password = "Enter your new password: ";
-            send(client_socket, prompt_new_password, strlen(prompt_new_password), 0);
-            bytes_read = recv(client_socket, new_password, sizeof(new_password) - 1, 0);
-            if (bytes_read <= 0)
-            {
-                close(client_socket);
-                return -1; // Error case
-            }
+            // Ask for new password
+            const char *new_pass_prompt = "Enter new password: ";
+            send(client_socket, new_pass_prompt, strlen(new_pass_prompt), 0);
+            bytes_read = recv(client_socket, new_password, sizeof(new_password), 0);
             new_password[bytes_read] = '\0';
 
-            // Change the password
-            if (change_password(user_id, old_password, new_password) == 0)
-            {
-                const char *success_message = "Password changed successfully.\n";
-                send(client_socket, success_message, strlen(success_message), 0);
-            }
-            else
-            {
-                const char *error_message = "Failed to change password.\n";
-                send(client_socket, error_message, strlen(error_message), 0);
+            // Change password for the currently logged-in user
+            if (change_password(account_id, old_password, new_password, client_socket)) {
+                const char *success_msg = "Password changed successfully.\n";
+                send(client_socket, success_msg, strlen(success_msg), 0);
+            } else {
+                const char *error_msg = "Failed to change password. Please check your current password and try again.\n";
+                send(client_socket, error_msg, strlen(error_msg), 0);
             }
             break;
         }
+        */
         case 5:
-            send(client_socket, "Logging out...\n", 15, 0);
+            send(client_socket, "Logging out...\n\n", 15, 0);
             return 1; // Return value for logout
         case 6:
-            send(client_socket, "Exiting...\n", 11, 0);
+            send(client_socket, "Exiting...\n\n", 11, 0);
             return 2; // Return value for exit
         default:
             send(client_socket, "Invalid choice. Please try again.\n", 34, 0);
