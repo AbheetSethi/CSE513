@@ -5,48 +5,56 @@ Roles:
     
 ## 1. Customer: 
 Customers log in using their credentials and have access to banking operations such as viewing account balances, depositing or withdrawing money, transferring funds, and applying for loans. The system ensures proper locking mechanisms to avoid race conditions when performing concurrent operations.
-        ◦ Login System (one session per user)
-        ◦ View Account Balance
-        ◦ Deposit Money
-        ◦ Withdraw Money
-        ◦ Transfer Funds
-        ◦ Apply for a Loan
-        ◦ Change Password
-        ◦ Adding Feedback
-        ◦ View Transaction History
-        ◦ Logout
-        ◦ Exit
+
+1. Login System (one session per user)
+2. View Account Balance
+3. Deposit Money
+4. Withdraw Money
+5. Transfer Funds
+6. Apply for a Loan
+7. Change Password
+8. Adding Feedback
+9. View Transaction History
+10. Logout
+11. Exit
+
 ## 2. Bank Employee: 
 Bank employees manage customer accounts, including opening, modifying, or closing accounts, as well as processing loans.
-        ◦ Login System (one session per user)
-        ◦ Add New Customer
-        ◦ Modify Customer Details
-        ◦ Process Loan Applications
-        ◦ Approve/Reject Loans
-        ◦ View Assigned Loan Applications
-        ◦ View Customer Transactions( Passbook Kind of feature)
-        ◦ Change Password
-        ◦ Logout
-        ◦ Exit
+
+1. Login System (one session per user)
+2. Add New Customer
+3. Modify Customer Details
+4. Process Loan Applications
+5. Approve/Reject Loans
+6. View Assigned Loan Applications
+7. View Customer Transactions( Passbook Kind of feature)
+8. Change Password
+9. Logout
+10. Exit
+
 ## 3. Manager:
-        ◦ Login System (one session per user)
-        ◦ Activate/Deactivate Customer Accounts
-        ◦ Assign Loan Application Processes to Employees
-        ◦ Review Customer Feedback
-        ◦ Change Password
-        ◦ Logout
-        ◦ Exit
+
+1. Login System (one session per user)
+2. Activate/Deactivate Customer Accounts
+3. Assign Loan Application Processes to Employees
+4. Review Customer Feedback
+5. Change Password
+6. Logout
+7. Exit
+
 ## 4. Administrator: 
 The Administrator has the highest level of access and manages both customer and employee accounts.
-        ◦ Login System (one session per user)
-        ◦ Add New Bank Employee
-        ◦ Modify Customer/Employee Details
-        ◦ Manage User Roles
-        ◦ Change Password
-        ◦ Logout
-        ◦ Exit
+
+1. Login System (one session per user)
+2. Add New Bank Employee
+3. Modify Customer/Employee Details
+4. Manage User Roles
+5. Change Password
+6. Logout
+7. Exit
 
 ## Technical Requirements:
+
     • Socket Programming: The server maintains the database and serves multiple clients concurrently. Clients can connect to the server and access their specific account details.
     • System Calls: Use system calls instead of library functions wherever possible, including process management, file management, file locking, semaphores, multithreading, and inter-process communication mechanisms.
 
